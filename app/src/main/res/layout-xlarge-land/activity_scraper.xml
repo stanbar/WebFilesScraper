@@ -93,10 +93,11 @@
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvVisitedPages"
             android:layout_width="0dp"
-            android:layout_height="100dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/rvDownloadedPdfs"
+            app:layout_constraintHorizontal_bias="0.5"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/tvVisitedPages" />
 
@@ -108,8 +109,8 @@
             android:layout_marginTop="8dp"
             android:text="@string/downloaded_pdfs"
 
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/rvVisitedPages" />
+            app:layout_constraintStart_toStartOf="@+id/rvDownloadedPdfs"
+            app:layout_constraintTop_toBottomOf="@+id/tvServiceState" />
 
         <ProgressBar
             android:id="@+id/progressBarDownloading"
@@ -126,13 +127,14 @@
             android:id="@+id/rvDownloadedPdfs"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
             android:layout_marginTop="8dp"
-            android:layout_marginBottom="8dp"
             android:maxHeight="100dp"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintHorizontal_bias="0.5"
+            app:layout_constraintStart_toEndOf="@+id/rvVisitedPages"
             app:layout_constraintTop_toBottomOf="@+id/tvDownloadedPdfs" />
 
 

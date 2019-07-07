@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import androidx.lifecycle.MutableLiveData
 import io.ktor.client.HttpClient
 import io.ktor.client.call.receive
 import io.ktor.client.request.get
@@ -13,11 +14,12 @@ import io.ktor.client.response.HttpResponse
 import io.ktor.http.toURI
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.io.jvm.javaio.copyTo
 import org.jsoup.Jsoup
-import org.koin.android.ext.android.inject
+import org.koin.android.ext.android.get
 import timber.log.Timber
 import java.io.File
 import java.net.MalformedURLException
@@ -25,61 +27,74 @@ import java.net.URI
 import java.net.URISyntaxException
 import java.net.URL
 import java.util.*
-import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.CoroutineContext
 
 class ScraperService : Service(), CoroutineScope {
     private val parent = SupervisorJob()
-    override val coroutineContext = parent
+    override val coroutineContext: CoroutineContext
+        get() = parent
     private val binder = ScraperBinder()
 
+    val visitedLiveData = MutableLiveData<List<String>>()
+    val downloadLiveData = MutableLiveData<List<String>>()
 
-    private val pdfsFound = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
-    val visited = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
-    val downloaded = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
-
-    val pdfStorage: PDFStorage by inject()
+    val visitedUpdateChannel = Channel<String>()
+    val downloadUpdateChannel = Channel<String>()
 
     fun scrapeWebsite(url: URL) {
-        val outputDirFile = File(pdfStorage.getOutputPath())
+        val visitedList = Collections.synchronizedList(ArrayList<String>())
+        visitedLiveData.value = visitedList
+        val downloadList = Collections.synchronizedList(ArrayList<String>())
+        downloadLiveData.value = downloadList
+
+        val pdfStorage: PDFStorage = get()
+
+        val outputDirFile = File(pdfStorage.getOutputPath(), url.host.replace(".", "_"))
         if (!outputDirFile.mkdirs()) {
             Timber.i("Directory $outputDirFile not created")
         }
-        val downloadPdfChannel = Channel<URL>(Channel.UNLIMITED)
-        val scrapEverything = launchScraper(url, downloadPdfChannel)
-        val downloadingJob = launchDownloader(outputDirFile, downloadPdfChannel)
+        val downloadPdfChannel = Channel<URL>(UNLIMITED)
+
+        val httpClient = HttpClient {
+            followRedirects = true
+            expectSuccess = false
+        }
+
+        val scrapEverything = launchScraper(url, visitedList, httpClient, downloadPdfChannel)
+        val downloadingJob = launchDownloader(outputDirFile, downloadList, downloadPdfChannel)
         launch {
             scrapEverything.join()
+            downloadPdfChannel.close()
             downloadingJob.join()
             stopSelf()
+            httpClient.close()
         }
     }
 
-    val httpClient = HttpClient {
-        followRedirects = true
-        expectSuccess = false
-    }
-
-    private fun CoroutineScope.launchScraper(url: URL, downloadPdfChannel: SendChannel<URL>): Job =
+    private fun CoroutineScope.launchScraper(
+        url: URL,
+        visited: MutableList<String>,
+        httpClient: HttpClient,
+        downloadPdfChannel: SendChannel<URL>
+    ): Job =
         launch(Dispatchers.IO) {
-            val urlHost = url.host
             if (visited.contains(url.toString()))
                 return@launch
 
-            if (visited.add(url.toString()))
-                println(url)
+            visited.add(url.toString())
+            visitedUpdateChannel.offer(url.toString())
             val res = try {
                 httpClient.get<HttpResponse>(url)
             } catch (e: Exception) {
                 Timber.e("GET on $url failed", e)
                 return@launch
             }
-            println("request call: ${res.call.request.url}")
-            println("res contentType: ${res.headers["Content-Type"]}")
+
+            Timber.d("Visited ${res.call.request.url}")
 
             if (res.headers["Content-Type"] == "application/pdf" || res.call.request.url.toString().endsWith(".pdf")) {
-                println("PDF Found: ${res.call.request.url}")
-                pdfsFound.add(res.call.request.url.toString())
-                downloadPdfChannel.send(res.call.request.url.toURI().toURL())
+                val fileUrl = res.call.request.url.toURI().toURL()
+                downloadPdfChannel.send(fileUrl)
             } else {
                 val document = try {
                     Jsoup.parse(res.receive<String>())
@@ -87,15 +102,13 @@ class ScraperService : Service(), CoroutineScope {
                     Timber.e("receive string on $url failed", e)
                     return@launch
                 }
-                //3. Parse the HTML to extract links to other urls
                 val linksOnPage = document.select("a[href]")
 
-                //5. For each extracted url... go back to Step 4.
                 linksOnPage.mapNotNull { page ->
                     try {
                         val host = URI(page.attr("abs:href")).host
-                        if (host == urlHost)
-                            launchScraper(URL(page.attr("abs:href")), downloadPdfChannel)
+                        if (host == url.host)
+                            launchScraper(URL(page.attr("abs:href")), visited, httpClient, downloadPdfChannel)
                         else
                             null
                     } catch (e: URISyntaxException) {
@@ -110,18 +123,23 @@ class ScraperService : Service(), CoroutineScope {
         }
 
 
-    private fun CoroutineScope.launchDownloader(outputDir: File, receiveChannel: ReceiveChannel<URL>) =
+    private fun CoroutineScope.launchDownloader(
+        outputDir: File,
+        downloaded: MutableList<String>,
+        receiveChannel: ReceiveChannel<URL>
+    ) =
         launch(Dispatchers.IO) {
             val downloadingClient = HttpClient()
             for (url in receiveChannel) {
                 val response = downloadingClient.get<HttpResponse>(url.toString())
-                println("Downloading file: ${url.file}")
+                Timber.d("Downloading PDF file: ${url.file}")
                 val fileName = url.toString().substring(url.toString().lastIndexOf('/') + 1, url.toString().length)
                 val outputFile = File(outputDir, fileName)
                 outputFile.outputStream().use { outputStream ->
                     val count = response.content.copyTo(outputStream)
-                    println("Downloading finished with $count bytes copied")
+                    Timber.d("Downloading finished with $count bytes copied")
                     downloaded.add(outputFile.absolutePath)
+                    downloadUpdateChannel.offer(outputFile.absolutePath)
                 }
             }
             downloadingClient.close()
@@ -174,8 +192,6 @@ class ScraperService : Service(), CoroutineScope {
     }
 
     private fun createNotificationChannel() {
-        // Create the NotificationChannel, but only on API 26+ because
-        // the NotificationChannel class is new and not in the support library
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name = applicationContext.getString(R.string.scraping)
             val descriptionText =
@@ -185,7 +201,6 @@ class ScraperService : Service(), CoroutineScope {
                 NotificationChannel(applicationContext.getString(R.string.scraper_channel_id), name, importance).apply {
                     description = descriptionText
                 }
-            // Register the channel with the system
             val notificationManager: NotificationManager =
                 applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
