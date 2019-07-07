@@ -1,5 +1,7 @@
-package com.stasbar.pdfcrawler
+package com.stasbar.pdfscraper
 
+import com.stasbar.pdfscraper.launchDownloader
+import com.stasbar.pdfscraper.launchScraper
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -14,11 +16,11 @@ import java.nio.file.Files.delete
 
 
 class BasicWebCrawlerTest {
-    val cacheDir = Files.createTempDirectory("webcrawler")
+    val cacheDir = Files.createTempDirectory(Paths.get("/","Users", "stasbar", "Sandbox", "downloadedPdfs"), "webcrawler")
 
     @After
     fun tearDown() {
-        deleteDir(cacheDir.toFile())
+        //deleteDir(cacheDir.toFile())
     }
 
     private fun deleteDir(file: File) {

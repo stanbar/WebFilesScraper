@@ -1,4 +1,4 @@
-package com.stasbar.pdfcrawler
+package com.stasbar.pdfscraper
 
 import org.junit.Test
 

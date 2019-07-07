@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">PDFCrawler</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="hint_enter_url">Enter URL</string>
+    <string name="visited_pages">Visited Pages</string>
+    <string name="downloaded_pdfs">Downloaded PDFs</string>
+    <string name="scraping">Scraping</string>
+    <string name="scraping_channel_description">Indicate scraping activity</string>
+    <string name="scraper_channel_id">scraper</string>
+    <string name="ticker_text">Ticker</string>
 </resources>
