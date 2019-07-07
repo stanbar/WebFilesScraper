@@ -10,12 +10,12 @@
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
         tools:context="com.stasbar.pdfscraper.ScraperActivity">
-
         <EditText
             android:id="@+id/etUrl"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:ellipsize="none"
+            android:focusable="false"
             android:hint="@string/hint_enter_url"
             android:inputType="textUri|textMultiLine"
             android:minHeight="200dp"

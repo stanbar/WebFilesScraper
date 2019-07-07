@@ -2,7 +2,6 @@ package com.stasbar.pdfscraper
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -13,7 +12,6 @@ import android.os.Bundle
 import android.os.IBinder
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.getSystemService
 import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import com.afollestad.materialdialogs.MaterialDialog
@@ -44,7 +42,7 @@ class ScraperActivity : AppCompatActivity() {
         connection = ScraperConnection()
         bindService(serviceIntent, connection, Context.BIND_AUTO_CREATE)
         setContentView(R.layout.activity_scraper)
-        tvOutputPath.text = pdfStorage.getOutputPath()
+        updateOutputPath(etUrl.text.toString())
         tvOutputPath.setOnClickListener {
             checkingPermissions {
                 openFolderChooser()
@@ -123,17 +121,6 @@ class ScraperActivity : AppCompatActivity() {
             Timber.d("service is already stopped")
         }
     }
-
-    fun isMyServiceRunning(serviceClass: Class<*>): Boolean {
-        val manager = getSystemService<ActivityManager>()!!
-        for (service in manager.getRunningServices(Integer.MAX_VALUE)) {
-            if (serviceClass.name == service.service.className) {
-                return true
-            }
-        }
-        return false
-    }
-
 
     override fun onDestroy() {
         try {
