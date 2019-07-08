@@ -112,7 +112,7 @@ class ScraperActivity : AppCompatActivity() {
         try {
             unbindService(connection)
         } catch (e: IllegalArgumentException) {
-            Timber.e("filed unbindService", e)
+            Timber.e(e, "filed unbindService")
         }
         val stopResult = stopService(serviceIntent)
         if (stopResult) {
@@ -126,7 +126,7 @@ class ScraperActivity : AppCompatActivity() {
         try {
             unbindService(connection)
         } catch (e: IllegalArgumentException) {
-            Timber.e("filed unbindService in onDestroy", e)
+            Timber.e(e, "filed unbindService in onDestroy")
         }
         connection.updater.cancel()
         super.onDestroy()

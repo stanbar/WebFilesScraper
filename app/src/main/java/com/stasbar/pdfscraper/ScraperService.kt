@@ -50,17 +50,17 @@ class ScraperService : Service(), CoroutineScope {
         if (!outputDirFile.mkdirs()) {
             Timber.i("Directory $outputDirFile not created")
         }
-        val downloadPdfChannel = Channel<URL>(UNLIMITED)
+        val foundPdfChannel = Channel<URL>(UNLIMITED)
 
         val scraperJob = with(webScraper) {
-            launchScraper(url, visitedList, httpClient, downloadPdfChannel, visitedUpdateChannel)
+            launchScraper(url, visitedList, httpClient, foundPdfChannel, visitedUpdateChannel)
         }
         val downloadingJob = with(webScraper) {
             launchDownloader(
                 HttpClient(),
                 outputDirFile,
                 downloadList,
-                downloadPdfChannel,
+                foundPdfChannel,
                 downloadUpdateChannel
             )
         }
@@ -70,7 +70,7 @@ class ScraperService : Service(), CoroutineScope {
             scraperJob.join()
             workingScraper = false
             httpClient.close()
-            downloadPdfChannel.close()
+            foundPdfChannel.close()
             downloadingJob.join()
             workingDownloader = false
             stopSelf()
