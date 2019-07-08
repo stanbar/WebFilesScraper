@@ -5,16 +5,16 @@ import io.ktor.client.call.receive
 import io.ktor.client.request.get
 import io.ktor.client.response.HttpResponse
 import io.ktor.http.ContentType
-import io.ktor.http.toURI
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.io.jvm.javaio.copyTo
+import kotlinx.coroutines.launch
 import org.jsoup.Jsoup
 import timber.log.Timber
 import java.io.File
-import java.net.MalformedURLException
-import java.net.URISyntaxException
 import java.net.URL
 
 class WebScraper {
@@ -24,7 +24,8 @@ class WebScraper {
         visited: MutableList<String>,
         httpClient: HttpClient,
         downloadPdfChannel: SendChannel<URL>,
-        visitedUpdateChannel: SendChannel<String>
+        visitedUpdateChannel: SendChannel<String>,
+        depth: Int
     ): Job =
         launch(Dispatchers.IO) {
             if (visited.contains(url.toString()))
@@ -34,29 +35,26 @@ class WebScraper {
             visitedUpdateChannel.offer(url.toString())
 
             if (url.toString().endsWith(".pdf")) {
-                downloadPdfChannel.send(url)
+                downloadPdfChannel.offer(url)
             } else {
+                Timber.d("[$depth] GET $url")
                 val res = try {
                     httpClient.get<HttpResponse>(url)
                 } catch (e: Exception) {
-                    Timber.e(e, "GET on $url failed")
+                    Timber.e(e, "[$depth] GET on $url failed")
                     return@launch
-                }
-                val reqUrl = res.call.request.url
-                Timber.d("GET $reqUrl")
-
-                // Prevent from following redirection as well
-                if (!visited.contains(reqUrl.toString())) {
-                    visited.add(reqUrl.toString())
-                    visitedUpdateChannel.offer(url.toString())
                 }
 
                 val contentType = res.headers["Content-Type"]
-
-                if (contentType != null && ContentType.parse(contentType).match(ContentType.Application.Pdf)) {
-                    val fileUrl = reqUrl.toURI().toURL()
-                    downloadPdfChannel.send(fileUrl)
-
+                val redirect = res.headers["Location"]
+                if (redirect != null && redirect.endsWith(".pdf")) {
+                    if (!visited.contains(redirect)) {
+                        visited.add(redirect)
+                        visitedUpdateChannel.offer(redirect)
+                    }
+                    downloadPdfChannel.offer(URL(redirect))
+                } else if (contentType != null && ContentType.parse(contentType).match(ContentType.Application.Pdf)) {
+                    downloadPdfChannel.offer(url)
                 } else if (contentType == null || ContentType.parse(contentType).match(ContentType.Text.Html)) {
                     val document = try {
                         Jsoup.parse(res.receive<String>())
@@ -70,30 +68,27 @@ class WebScraper {
 
                     linksOnPage.mapNotNull { page ->
                         try {
-                            val linkUrl = URL(url, page.attr("href"))
+                            val linkUrl = URL(page.attr("abs:href"))
                             Timber.d("found link to $linkUrl")
-                            if (linkUrl.host == url.host)
+                            if (linkUrl.host == url.host) {
                                 launchScraper(
                                     linkUrl,
                                     visited,
                                     httpClient,
                                     downloadPdfChannel,
-                                    visitedUpdateChannel
+                                    visitedUpdateChannel,
+                                    depth + 1
                                 )
-                            else
+                            } else
                                 null
-                        } catch (e: URISyntaxException) {
-                            Timber.e(e)
-                            null
-                        } catch (e: MalformedURLException) {
-                            Timber.e(e)
+                        } catch (e: Exception) {
+                            Timber.e("${e.message}. On href ${page.attr("abs:href")}")
                             null
                         }
-                    }.joinAll()
+                    }
                 }
             }
         }
-
 
     fun CoroutineScope.launchDownloader(
         httpClient: HttpClient = HttpClient(),

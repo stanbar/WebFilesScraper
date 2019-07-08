@@ -53,8 +53,9 @@ class ScraperService : Service(), CoroutineScope {
         val foundPdfChannel = Channel<URL>(UNLIMITED)
 
         val scraperJob = with(webScraper) {
-            launchScraper(url, visitedList, httpClient, foundPdfChannel, visitedUpdateChannel)
+            launchScraper(url, visitedList, httpClient, foundPdfChannel, visitedUpdateChannel, depth = 0)
         }
+
         val downloadingJob = with(webScraper) {
             launchDownloader(
                 HttpClient(),
@@ -128,7 +129,7 @@ class ScraperService : Service(), CoroutineScope {
             val name = applicationContext.getString(R.string.scraping)
             val descriptionText =
                 applicationContext.getString(R.string.scraping_channel_description)
-            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val importance = NotificationManager.IMPORTANCE_LOW
             val channel =
                 NotificationChannel(applicationContext.getString(R.string.scraper_channel_id), name, importance).apply {
                     description = descriptionText

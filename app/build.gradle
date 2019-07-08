@@ -8,8 +8,8 @@ android {
         applicationId "com.stasbar.pdfscraper"
         minSdkVersion 21
         targetSdkVersion 28
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
@@ -71,6 +71,7 @@ dependencies {
     implementation "org.koin:koin-androidx-viewmodel:$koin"
     testImplementation "org.koin:koin-test:$koin"
 
+
     implementation "io.ktor:ktor-client-android:1.2.2"
     implementation 'com.karumi:dexter:5.0.0'
 
@@ -78,6 +79,8 @@ dependencies {
     implementation 'com.afollestad.material-dialogs:core:3.1.0'
     implementation 'com.afollestad.material-dialogs:files:3.1.0'
 
+    debugImplementation 'com.squareup.leakcanary:leakcanary-android:2.0-alpha-3'
+    
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'androidx.test:runner:1.2.0'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
