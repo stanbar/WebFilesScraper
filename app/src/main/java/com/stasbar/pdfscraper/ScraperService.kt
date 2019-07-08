@@ -8,23 +8,15 @@ import android.os.Build
 import android.os.IBinder
 import androidx.lifecycle.MutableLiveData
 import io.ktor.client.HttpClient
-import io.ktor.client.call.receive
-import io.ktor.client.request.get
-import io.ktor.client.response.HttpResponse
-import io.ktor.http.toURI
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.SendChannel
-import kotlinx.coroutines.io.jvm.javaio.copyTo
-import org.jsoup.Jsoup
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.get
 import timber.log.Timber
 import java.io.File
-import java.net.MalformedURLException
-import java.net.URI
-import java.net.URISyntaxException
 import java.net.URL
 import java.util.*
 import kotlin.coroutines.CoroutineContext
@@ -41,6 +33,9 @@ class ScraperService : Service(), CoroutineScope {
     val visitedUpdateChannel = Channel<String>()
     val downloadUpdateChannel = Channel<String>()
 
+    var workingScraper = false
+    var workingDownloader = false
+
     fun scrapeWebsite(url: URL) {
         val visitedList = Collections.synchronizedList(ArrayList<String>())
         visitedLiveData.value = visitedList
@@ -48,6 +43,8 @@ class ScraperService : Service(), CoroutineScope {
         downloadLiveData.value = downloadList
 
         val pdfStorage: PDFStorage = get()
+        val webScraper: WebScraper = get()
+        val httpClient: HttpClient = get()
 
         val outputDirFile = File(pdfStorage.getOutputPath(), url.host.replace(".", "_"))
         if (!outputDirFile.mkdirs()) {
@@ -55,95 +52,30 @@ class ScraperService : Service(), CoroutineScope {
         }
         val downloadPdfChannel = Channel<URL>(UNLIMITED)
 
-        val httpClient = HttpClient {
-            followRedirects = true
-            expectSuccess = false
+        val scraperJob = with(webScraper) {
+            launchScraper(url, visitedList, httpClient, downloadPdfChannel, visitedUpdateChannel)
         }
-
-        val scrapEverything = launchScraper(url, visitedList, httpClient, downloadPdfChannel)
-        val downloadingJob = launchDownloader(outputDirFile, downloadList, downloadPdfChannel)
+        val downloadingJob = with(webScraper) {
+            launchDownloader(
+                HttpClient(),
+                outputDirFile,
+                downloadList,
+                downloadPdfChannel,
+                downloadUpdateChannel
+            )
+        }
         launch {
-            scrapEverything.join()
+            workingScraper = true
+            workingDownloader = true
+            scraperJob.join()
+            workingScraper = false
+            httpClient.close()
             downloadPdfChannel.close()
             downloadingJob.join()
+            workingDownloader = false
             stopSelf()
-            httpClient.close()
         }
     }
-
-    private fun CoroutineScope.launchScraper(
-        url: URL,
-        visited: MutableList<String>,
-        httpClient: HttpClient,
-        downloadPdfChannel: SendChannel<URL>
-    ): Job =
-        launch(Dispatchers.IO) {
-            if (visited.contains(url.toString()))
-                return@launch
-
-            visited.add(url.toString())
-            visitedUpdateChannel.offer(url.toString())
-            val res = try {
-                httpClient.get<HttpResponse>(url)
-            } catch (e: Exception) {
-                Timber.e("GET on $url failed", e)
-                return@launch
-            }
-
-            Timber.d("Visited ${res.call.request.url}")
-
-            if (res.headers["Content-Type"] == "application/pdf" || res.call.request.url.toString().endsWith(".pdf")) {
-                val fileUrl = res.call.request.url.toURI().toURL()
-                downloadPdfChannel.send(fileUrl)
-            } else {
-                val document = try {
-                    Jsoup.parse(res.receive<String>())
-                } catch (e: Exception) {
-                    Timber.e("receive string on $url failed", e)
-                    return@launch
-                }
-                val linksOnPage = document.select("a[href]")
-
-                linksOnPage.mapNotNull { page ->
-                    try {
-                        val host = URI(page.attr("abs:href")).host
-                        if (host == url.host)
-                            launchScraper(URL(page.attr("abs:href")), visited, httpClient, downloadPdfChannel)
-                        else
-                            null
-                    } catch (e: URISyntaxException) {
-                        println(e.message)
-                        null
-                    } catch (e: MalformedURLException) {
-                        println(e.message)
-                        null
-                    }
-                }
-            }
-        }
-
-
-    private fun CoroutineScope.launchDownloader(
-        outputDir: File,
-        downloaded: MutableList<String>,
-        receiveChannel: ReceiveChannel<URL>
-    ) =
-        launch(Dispatchers.IO) {
-            val downloadingClient = HttpClient()
-            for (url in receiveChannel) {
-                val response = downloadingClient.get<HttpResponse>(url.toString())
-                Timber.d("Downloading PDF file: ${url.file}")
-                val fileName = url.toString().substring(url.toString().lastIndexOf('/') + 1, url.toString().length)
-                val outputFile = File(outputDir, fileName)
-                outputFile.outputStream().use { outputStream ->
-                    val count = response.content.copyTo(outputStream)
-                    Timber.d("Downloading finished with $count bytes copied")
-                    downloaded.add(outputFile.absolutePath)
-                    downloadUpdateChannel.offer(outputFile.absolutePath)
-                }
-            }
-            downloadingClient.close()
-        }
 
     override fun onBind(intent: Intent): IBinder {
         Timber.d("onBind")

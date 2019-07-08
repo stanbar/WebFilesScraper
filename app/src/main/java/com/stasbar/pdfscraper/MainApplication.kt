@@ -2,8 +2,8 @@ package com.stasbar.pdfscraper
 
 import android.app.Application
 import android.preference.PreferenceManager
+import io.ktor.client.HttpClient
 import org.koin.android.ext.koin.androidContext
-import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
 import timber.log.Timber
@@ -23,5 +23,12 @@ class MainApplication : Application() {
     private val androidContextModules = module {
         single { PreferenceManager.getDefaultSharedPreferences(androidContext()) }
         single { PDFStorage(get()) }
+        single { WebScraper() }
+        factory {
+            HttpClient {
+                followRedirects = true
+                expectSuccess = false
+            }
+        }
     }
 }
