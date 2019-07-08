@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">PDFScraper</string>
+    <string name="app_name">WebFilesScraper</string>
     <string name="start">Start</string>
     <string name="stop">Stop</string>
     <string name="hint_enter_url">Enter URL</string>

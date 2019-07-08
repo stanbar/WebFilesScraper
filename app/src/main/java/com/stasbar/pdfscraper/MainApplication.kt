@@ -22,7 +22,7 @@ class MainApplication : Application() {
 
     private val androidContextModules = module {
         single { PreferenceManager.getDefaultSharedPreferences(androidContext()) }
-        single { PDFStorage(get()) }
+        single { FilesStorage(get()) }
         single { WebScraper() }
         factory {
             HttpClient {

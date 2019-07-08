@@ -5,7 +5,7 @@ import android.os.Environment
 import timber.log.Timber
 import java.io.File
 
-class PDFStorage(val sharedPreferences: SharedPreferences) {
+class FilesStorage(val sharedPreferences: SharedPreferences) {
     fun getOutputPath(): String {
         val defaultOutputDir = File(
             Environment.getExternalStoragePublicDirectory(
@@ -24,6 +24,6 @@ class PDFStorage(val sharedPreferences: SharedPreferences) {
 
     companion object {
         const val OUTPUT_PATH_KEY = "output_dir"
-        const val OUTPUT_DIR_NAME = "PDFScraper"
+        const val OUTPUT_DIR_NAME = "WebFilesScraper"
     }
 }

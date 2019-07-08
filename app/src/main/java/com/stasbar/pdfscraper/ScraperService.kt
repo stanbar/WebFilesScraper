@@ -30,8 +30,8 @@ class ScraperService : Service(), CoroutineScope {
     val visitedLiveData = MutableLiveData<List<String>>()
     val downloadLiveData = MutableLiveData<List<String>>()
 
-    val visitedUpdateChannel = Channel<String>()
-    val downloadUpdateChannel = Channel<String>()
+    val visitedUpdateChannel = Channel<String>(10)
+    val downloadUpdateChannel = Channel<String>(10)
 
     var workingScraper = false
     var workingDownloader = false
@@ -42,11 +42,11 @@ class ScraperService : Service(), CoroutineScope {
         val downloadList = Collections.synchronizedList(ArrayList<String>())
         downloadLiveData.value = downloadList
 
-        val pdfStorage: PDFStorage = get()
+        val filesStorage: FilesStorage = get()
         val webScraper: WebScraper = get()
         val httpClient: HttpClient = get()
 
-        val outputDirFile = File(pdfStorage.getOutputPath(), url.host.replace(".", "_"))
+        val outputDirFile = File(filesStorage.getOutputPath(), url.host.replace(".", "_"))
         if (!outputDirFile.mkdirs()) {
             Timber.i("Directory $outputDirFile not created")
         }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import org.jsoup.Jsoup
 import timber.log.Timber
 import java.io.File
+import java.net.MalformedURLException
 import java.net.URL
 
 class WebScraper {
@@ -68,7 +69,12 @@ class WebScraper {
 
                     linksOnPage.mapNotNull { page ->
                         try {
-                            val linkUrl = URL(page.attr("abs:href"))
+                            val linkUrl = try {
+                                URL(page.attr("abs:href"))
+                            } catch (e: MalformedURLException) {
+                                URL(url, page.attr("href"))
+                            }
+
                             Timber.d("found link to $linkUrl")
                             if (linkUrl.host == url.host) {
                                 launchScraper(

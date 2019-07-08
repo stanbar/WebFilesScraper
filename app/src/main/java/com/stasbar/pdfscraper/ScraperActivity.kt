@@ -32,7 +32,7 @@ import java.net.URL
 class ScraperActivity : AppCompatActivity() {
 
     private val serviceIntent by lazy { Intent(this, ScraperService::class.java) }
-    private val pdfStorage: PDFStorage by inject()
+    private val filesStorage: FilesStorage by inject()
     lateinit var visitedAdapter: UriAdapter
     lateinit var downloadedAdapter: UriAdapter
     lateinit var service: ScraperService
@@ -71,7 +71,7 @@ class ScraperActivity : AppCompatActivity() {
     private fun updateOutputPath(path: String) {
         try {
             val url = URL(path)
-            val outputDir = File(pdfStorage.getOutputPath(), url.host.replace(".", "_"))
+            val outputDir = File(filesStorage.getOutputPath(), url.host.replace(".", "_"))
             tvOutputPath.text = outputDir.absolutePath
             Timber.d("host: ${url.host}")
             etUrl.error = null
@@ -83,10 +83,10 @@ class ScraperActivity : AppCompatActivity() {
     private fun openFolderChooser() {
         MaterialDialog(this@ScraperActivity).show {
             folderChooser(
-                initialDirectory = File(pdfStorage.getOutputPath()),
+                initialDirectory = File(filesStorage.getOutputPath()),
                 allowFolderCreation = true
             ) { _, file ->
-                pdfStorage.setOutputPath(file.absolutePath)
+                filesStorage.setOutputPath(file.absolutePath)
             }
         }
     }
@@ -98,6 +98,7 @@ class ScraperActivity : AppCompatActivity() {
             startService(serviceIntent)
         }
 
+        clearUi()
         val urlString = etUrl.text.toString()
         try {
             val url = URL(urlString)
@@ -107,12 +108,18 @@ class ScraperActivity : AppCompatActivity() {
         }
     }
 
+    private fun clearUi() {
+        downloadedAdapter.replaceData(emptyList())
+        visitedAdapter.replaceData(emptyList())
+        tvDownloadedPdfs.text = getString(R.string.downloaded_pdfs)
+        tvVisitedPages.text = getString(R.string.visited_pages)
+    }
+
     private fun stopCrawler() {
-        connection.updater.cancel()
         try {
             unbindService(connection)
         } catch (e: IllegalArgumentException) {
-            Timber.e(e, "filed unbindService")
+            Timber.e(e, "failed unbindService")
         }
         val stopResult = stopService(serviceIntent)
         if (stopResult) {
