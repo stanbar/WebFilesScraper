@@ -54,7 +54,6 @@ class ScraperActivity : AppCompatActivity() {
 
         btnStartCrawler.setOnClickListener { startCrawler() }
         btnStop.setOnClickListener { stopCrawler() }
-
         visitedAdapter = UriAdapter { uri -> Intent(Intent.ACTION_VIEW, Uri.parse(uri)).also { startActivity(it) } }
         rvVisitedPages.adapter = visitedAdapter
 
@@ -116,17 +115,7 @@ class ScraperActivity : AppCompatActivity() {
     }
 
     private fun stopCrawler() {
-        try {
-            unbindService(connection)
-        } catch (e: IllegalArgumentException) {
-            Timber.e(e, "failed unbindService")
-        }
-        val stopResult = stopService(serviceIntent)
-        if (stopResult) {
-            Timber.d("stopped service")
-        } else {
-            Timber.d("service is already stopped")
-        }
+        service.stop()
     }
 
     override fun onDestroy() {
@@ -135,7 +124,6 @@ class ScraperActivity : AppCompatActivity() {
         } catch (e: IllegalArgumentException) {
             Timber.e(e, "filed unbindService in onDestroy")
         }
-        connection.updater.cancel()
         super.onDestroy()
     }
 
@@ -152,7 +140,7 @@ class ScraperActivity : AppCompatActivity() {
 
 
     inner class ScraperConnection : ServiceConnection {
-        lateinit var updater: Job
+        private lateinit var updater: Job
         @SuppressLint("SetTextI18n")
         override fun onServiceConnected(className: ComponentName, binder: IBinder) {
             Timber.d("onServiceConnected")
@@ -203,6 +191,19 @@ class ScraperActivity : AppCompatActivity() {
                         }
                     }
                 }
+
+                ref.get()?.workingDownloader?.observe(this@ScraperActivity, Observer {
+                    launch(Dispatchers.Main) {
+                        progressBarDownloading.setVisibility(it == true)
+                    }
+                })
+
+                ref.get()?.workingScraper?.observe(this@ScraperActivity, Observer {
+                    launch(Dispatchers.Main) {
+                        progressBarScraping.setVisibility(it == true)
+                    }
+                })
+
             }
     }
 

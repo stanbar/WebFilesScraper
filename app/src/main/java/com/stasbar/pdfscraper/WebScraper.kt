@@ -67,12 +67,12 @@ class WebScraper {
 
                     Timber.d("Found ${linksOnPage.size} links on $url")
 
-                    linksOnPage.mapNotNull { page ->
+                    for (link in linksOnPage) {
                         try {
                             val linkUrl = try {
-                                URL(page.attr("abs:href"))
+                                URL(link.attr("abs:href"))
                             } catch (e: MalformedURLException) {
-                                URL(url, page.attr("href"))
+                                URL(url, link.attr("href"))
                             }
 
                             Timber.d("found link to $linkUrl")
@@ -85,11 +85,9 @@ class WebScraper {
                                     visitedUpdateChannel,
                                     depth + 1
                                 )
-                            } else
-                                null
+                            }
                         } catch (e: Exception) {
-                            Timber.e("${e.message}. On href ${page.attr("abs:href")}")
-                            null
+                            Timber.e("${e.message}. On href ${link.attr("abs:href")}")
                         }
                     }
                 }

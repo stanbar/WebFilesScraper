@@ -20,7 +20,7 @@
             android:inputType="textUri|textMultiLine"
             android:minHeight="100dp"
             android:scrollHorizontally="false"
-            android:text="http://192.168.0.100:8080/"
+            android:text="https://bip.gdansk.pl/zamowienia-publiczne/reklama-gdanska-jako-produktu-turystycznego-w-formie-lokowania-produktu-w-serialu-tvn,a,145522"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintTop_toTopOf="parent" />

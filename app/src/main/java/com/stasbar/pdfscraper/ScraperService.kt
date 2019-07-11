@@ -8,12 +8,9 @@ import android.os.Build
 import android.os.IBinder
 import androidx.lifecycle.MutableLiveData
 import io.ktor.client.HttpClient
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
-import kotlinx.coroutines.launch
 import org.koin.android.ext.android.get
 import timber.log.Timber
 import java.io.File
@@ -22,9 +19,12 @@ import java.util.*
 import kotlin.coroutines.CoroutineContext
 
 class ScraperService : Service(), CoroutineScope {
+
     private val parent = SupervisorJob()
+
     override val coroutineContext: CoroutineContext
-        get() = parent
+        get() = parent + Dispatchers.Main
+
     private val binder = ScraperBinder()
 
     val visitedLiveData = MutableLiveData<List<String>>()
@@ -33,8 +33,8 @@ class ScraperService : Service(), CoroutineScope {
     val visitedUpdateChannel = Channel<String>(10)
     val downloadUpdateChannel = Channel<String>(10)
 
-    var workingScraper = false
-    var workingDownloader = false
+    var workingScraper = MutableLiveData<Boolean>()
+    var workingDownloader = MutableLiveData<Boolean>()
 
     fun scrapeWebsite(url: URL) {
         val visitedList = Collections.synchronizedList(ArrayList<String>())
@@ -52,10 +52,11 @@ class ScraperService : Service(), CoroutineScope {
         }
         val foundPdfChannel = Channel<URL>(UNLIMITED)
 
+
         val scraperJob = with(webScraper) {
             launchScraper(url, visitedList, httpClient, foundPdfChannel, visitedUpdateChannel, depth = 0)
         }
-
+        workingScraper.value = true
         val downloadingJob = with(webScraper) {
             launchDownloader(
                 HttpClient(),
@@ -65,17 +66,21 @@ class ScraperService : Service(), CoroutineScope {
                 downloadUpdateChannel
             )
         }
-        launch {
-            workingScraper = true
-            workingDownloader = true
+        workingDownloader.value = true
+
+        GlobalScope.launch(Dispatchers.Main) {
             scraperJob.join()
-            workingScraper = false
+            workingScraper.value = false
             httpClient.close()
             foundPdfChannel.close()
             downloadingJob.join()
-            workingDownloader = false
+            workingDownloader.value = false
             stopSelf()
         }
+    }
+
+    fun stop() {
+        parent.cancelChildren()
     }
 
     override fun onBind(intent: Intent): IBinder {
@@ -101,9 +106,10 @@ class ScraperService : Service(), CoroutineScope {
 
     override fun onDestroy() {
         Timber.d("onDestroy")
-        parent.cancelChildren()
+        stop()
         super.onDestroy()
     }
+
 
     private fun showForegroundNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -139,6 +145,7 @@ class ScraperService : Service(), CoroutineScope {
             notificationManager.createNotificationChannel(channel)
         }
     }
+
 
     inner class ScraperBinder : Binder() {
         fun getService(): ScraperService = this@ScraperService
